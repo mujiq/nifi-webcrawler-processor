@@ -25,7 +25,7 @@ A custom Apache NiFi processor for recursively crawling REST APIs using a Depth-
 
 1. Make the scripts executable:
    ```
-   chmod +x build.sh deploy.sh
+   chmod +x build.sh deploy.sh clean.sh
    ```
 
 2. Build the NAR file (processor module):
@@ -46,11 +46,27 @@ The workflow is divided into two separate scripts:
 
 - `build.sh`: Builds only the Maven project to create the NAR file
 - `deploy.sh`: Deploys using the official Apache NiFi image and installs the NAR file
+- `clean.sh`: Completely cleans up the environment (containers, volumes, build artifacts)
 
 This separation allows you to:
 1. Build the processor once
 2. Deploy multiple times without rebuilding
 3. Update the processor code and rebuild only when needed
+4. Clean up the entire environment when needed
+
+### Clean Environment
+
+To clean up your development environment:
+
+```
+./clean.sh
+```
+
+This will:
+- Stop and remove any running NiFi containers
+- Remove all project-related volumes
+- Clean all Maven build artifacts
+- Remove temporary and generated files
 
 ### Processor Configuration
 
