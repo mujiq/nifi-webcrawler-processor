@@ -1,0 +1,2 @@
+# This file contains a list of custom processors that we've added to NiFi
+nifi-webcrawler-nar-1.0.0.nar - Web Crawler Processor for REST APIs

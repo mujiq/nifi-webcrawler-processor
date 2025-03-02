@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<authorizations>
+    <policies>
+        <policy identifier="657660BF-125E-4848-9C8B-47D260226EE7" resource="/system" action="R">
+            <user identifier="CAD9B8B6-8FC9-410F-BA9D-226596AC8FAF" identity="admin"/>
+        </policy>
+        <policy identifier="7EA156A1-5B76-4284-B689-06FAD7C23CFF" resource="/controller" action="R">
+            <user identifier="C0041E11-CA49-4E39-AC30-35C8DE47E4D5" identity="admin"/>
+        </policy>
+        <policy identifier="6F776D97-FD7E-4A83-973C-9966C5C80575" resource="/controller" action="W">
+            <user identifier="5D1C49C7-67C5-42E3-9B19-EA5B18DD1923" identity="admin"/>
+        </policy>
+        <policy identifier="06A6A8EE-4BFE-48FE-90C6-FFE74D6858EF" resource="/flow" action="R">
+            <user identifier="C09922F0-B68F-4408-BDE6-32BC9DCBAA04" identity="admin"/>
+        </policy>
+        <policy identifier="1E6E5859-9AE8-4BDC-AC63-F271303E27A0" resource="/flow" action="W">
+            <user identifier="6228E590-38DD-402E-BD51-DF6055692FD5" identity="admin"/>
+        </policy>
+        <policy identifier="32A438C7-0E9E-4FE6-AE37-69B95622C22B" resource="/provenance" action="R">
+            <user identifier="01F78949-ECB1-456F-9C2C-9E33EBC86B84" identity="admin"/>
+        </policy>
+        <policy identifier="EF63D244-96C4-4979-9268-988BB6B3D62E" resource="/provenance" action="W">
+            <user identifier="1B6D32DF-A713-4555-AF5F-880C44467E66" identity="admin"/>
+        </policy>
+        <policy identifier="833FDE97-E313-46A7-AB2E-0A4A8526773D" resource="/policy" action="R">
+            <user identifier="F130DA78-8FBE-4D36-A7F8-317F6E1879F4" identity="admin"/>
+        </policy>
+        <policy identifier="D420092C-1012-4919-94D5-B09843E41F54" resource="/policy" action="W">
+            <user identifier="63B8FD25-46C1-43B5-9DBC-5C9DC079AE81" identity="admin"/>
+        </policy>
+        <policy identifier="28FC995D-5EBC-4064-95D1-A79B2B728AC0" resource="/proxy" action="R">
+            <user identifier="BC3D0230-A9DA-42F4-820E-B338F044A941" identity="admin"/>
+        </policy>
+        <policy identifier="7EC4CD0D-6EEF-4DD2-8076-612E558A220D" resource="/proxy" action="W">
+            <user identifier="7C45658E-700F-4D84-A9CC-EFBA0883F28E" identity="admin"/>
+        </policy>
+    </policies>
+</authorizations>
