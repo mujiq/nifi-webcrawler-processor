@@ -1,0 +1,37 @@
+# GitHub Repository Setup Instructions
+
+## 1. Create a new repository on GitHub
+1. Go to https://github.com/new
+2. Enter a repository name (e.g., "nifi-webcrawler-processor")
+3. Add a description: "A custom Apache NiFi processor for recursively crawling REST APIs using a Depth-First Search approach"
+4. Choose visibility (public or private)
+5. Do NOT initialize with README, .gitignore, or license (as we already have these files)
+6. Click "Create repository"
+
+## 2. Connect your local repository to GitHub
+After creating the repository, GitHub will show instructions. Use the section titled "...or push an existing repository from the command line"
+
+Run these commands in your terminal (replace YOUR_USERNAME with your GitHub username and REPO_NAME with your repository name):
+
+```bash
+git remote add origin https://github.com/YOUR_USERNAME/REPO_NAME.git
+git branch -M main
+git push -u origin main
+```
+
+## 3. Verify the upload
+1. After pushing, refresh your GitHub repository page
+2. You should see all your project files listed
+3. The README.md will be rendered on the main page
+
+## Next steps
+- Set up GitHub Actions for CI/CD if needed
+- Add collaborators to your repository
+- Create issue templates
+- Set up branch protection rules
+
+## Troubleshooting
+If you encounter authentication issues when pushing:
+- Try using SSH instead of HTTPS
+- Use a personal access token for HTTPS authentication
+- Use GitHub CLI (`gh`) for easier authentication 
