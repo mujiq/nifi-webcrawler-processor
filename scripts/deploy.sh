@@ -80,11 +80,41 @@ if podman ps -a --filter name=$CONTAINER_NAME --filter status=running | grep -q 
     podman exec $CONTAINER_NAME mkdir -p /opt/nifi/nifi-current/extensions
     podman cp $NAR_FILE $CONTAINER_NAME:/opt/nifi/nifi-current/extensions/
     
-    echo "=========================================="
-    echo "NAR file has been updated in the running NiFi container."
-    echo "You may need to restart the processor or NiFi to load the new version."
-    echo "To restart NiFi: podman restart $CONTAINER_NAME"
-    echo "=========================================="
+    echo "Restarting NiFi process inside the container to load the new NAR file..."
+    
+    # First get the process ID of the NiFi Java process
+    NIFI_PID=$(podman exec $CONTAINER_NAME ps -ef | grep java | grep nifi | grep -v grep | awk '{print $1}')
+    
+    if [ -n "$NIFI_PID" ]; then
+        echo "Found NiFi process with PID: $NIFI_PID"
+        
+        # Send SIGTERM to the process to trigger a graceful shutdown
+        echo "Stopping NiFi process..."
+        podman exec $CONTAINER_NAME kill -15 $NIFI_PID
+        
+        # Wait for the process to stop
+        echo "Waiting for NiFi to stop gracefully..."
+        sleep 10
+        
+        # Start NiFi again using the startup script
+        echo "Starting NiFi process..."
+        podman exec -d $CONTAINER_NAME /opt/nifi/nifi-current/bin/nifi.sh start
+        
+        # Wait for NiFi to start
+        echo "Waiting for NiFi to start..."
+        sleep 20
+        
+        echo "=========================================="
+        echo "NAR file has been updated and NiFi process restarted."
+        echo "NiFi should now recognize the updated processor."
+        echo "If NiFi doesn't appear to be running, you may need to restart the container:"
+        echo "podman restart $CONTAINER_NAME"
+        echo "=========================================="
+    else
+        echo "Warning: Could not find the NiFi process. The NAR file has been updated, but you'll need to restart the container manually:"
+        echo "podman restart $CONTAINER_NAME"
+    fi
+    
     exit 0
 fi
 
