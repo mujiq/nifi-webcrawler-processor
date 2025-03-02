@@ -22,6 +22,8 @@ else
         echo "Java $java_version is installed, but we need Java 21. Installing Java 21..."
         brew install openjdk@21
         sudo ln -sfn $(brew --prefix)/opt/openjdk@21/libexec/openjdk.jdk /Library/Java/JavaVirtualMachines/openjdk-21.jdk
+    else
+        echo "Java 21 is already installed."
     fi
 fi
 

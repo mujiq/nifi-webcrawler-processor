@@ -31,7 +31,7 @@ if ! command -v podman &> /dev/null; then
     # Initialize podman if not already initialized
     if ! podman machine list 2>/dev/null | grep -q "podman-machine-default"; then
         echo "Initializing podman..."
-        podman machine init --cpus 4 --memory 8192 --disk-size 81920
+        podman machine init --cpus 4 --memory 8192 --disk-size 40960
     fi
     
     # Start podman if not already running
@@ -47,7 +47,7 @@ else
     # Check if podman machine exists
     if ! podman machine list 2>/dev/null | grep -q "podman-machine-default"; then
         echo "Initializing podman machine..."
-        podman machine init --cpus 4 --memory 8192 --disk-size 81920
+        podman machine init --cpus 4 --memory 8192 --disk-size 40960
         podman machine start
     elif ! podman machine list 2>/dev/null | grep -q "Currently running"; then
         echo "Starting podman machine..."
@@ -68,8 +68,8 @@ fi
 echo "Found NAR file: $NAR_FILE"
 
 # Pull the official NiFi image
-echo "Pulling official Apache NiFi image: $IMAGE_NAME"
-podman pull $IMAGE_NAME
+echo "Pulling official Apache NiFi image: $IMAGE_NAME for arm64 architecture"
+podman pull --platform linux/arm64 $IMAGE_NAME
 
 # Check if necessary volumes exist, create if they don't
 echo "Checking volumes..."
@@ -120,11 +120,11 @@ echo "NAR volume path: $NAR_VOLUME_PATH"
 
 # Copy NAR file to the volume
 echo "Copying NAR file to volume..."
-podman run --rm -v $NAR_VOLUME:/nars -v $(pwd)/nifi-webcrawler-nar/target:/src:ro alpine sh -c "mkdir -p /nars && cp /src/nifi-webcrawler-nar-*.nar /nars/"
+podman run --platform linux/arm64 --rm -v $NAR_VOLUME:/nars -v $(pwd)/nifi-webcrawler-nar/target:/src:ro alpine sh -c "mkdir -p /nars && cp /src/nifi-webcrawler-nar-*.nar /nars/"
 
 # Create a temporary container to generate initial configuration and to copy our NAR
 echo "Setting up initial configuration..."
-TEMP_CONTAINER=$(podman run -d $IMAGE_NAME)
+TEMP_CONTAINER=$(podman run --platform linux/arm64 -d $IMAGE_NAME)
 sleep 5
 
 # Copy the NAR file to the container's lib directory
@@ -140,15 +140,19 @@ IDENTITY_PROP=$(podman exec $TEMP_CONTAINER grep "nifi.security.identity.mapping
 podman stop $TEMP_CONTAINER
 podman rm $TEMP_CONTAINER
 
+# Set environment variable for Java 21
+JAVA_OPTS="-Dnifi.properties.dir=/opt/nifi/nifi-current/conf -Xms4g -Xmx8g"
+
 # Run NiFi container
 echo "Starting NiFi container..."
-podman run -d \
+podman run --platform linux/arm64 -d \
     --name $CONTAINER_NAME \
     --restart unless-stopped \
     -p 8080:8080 \
     -e NIFI_WEB_HTTP_PORT=8080 \
     -e SINGLE_USER_CREDENTIALS_USERNAME=$NIFI_ADMIN_USERNAME \
     -e SINGLE_USER_CREDENTIALS_PASSWORD=$NIFI_ADMIN_PASSWORD \
+    -e JAVA_OPTS="$JAVA_OPTS" \
     -v $DATA_VOLUME:/opt/nifi/nifi-current/data \
     -v $CONFIG_VOLUME:/opt/nifi/nifi-current/conf \
     -v $LOGS_VOLUME:/opt/nifi/nifi-current/logs \

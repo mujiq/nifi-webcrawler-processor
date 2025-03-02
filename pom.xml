@@ -11,8 +11,8 @@
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <maven.compiler.source>21</maven.compiler.source>
-        <maven.compiler.target>21</maven.compiler.target>
+        <maven.compiler.source>8</maven.compiler.source>
+        <maven.compiler.target>8</maven.compiler.target>
         <nifi.version>1.15.3</nifi.version>
     </properties>
 
@@ -81,6 +81,21 @@
                 <version>${nifi.version}</version>
                 <scope>provided</scope>
             </dependency>
+            
+            <!-- HTML Processing -->
+            <dependency>
+                <groupId>org.jsoup</groupId>
+                <artifactId>jsoup</artifactId>
+                <version>1.16.1</version>
+            </dependency>
+            
+            <!-- PDF Processing -->
+            <dependency>
+                <groupId>org.apache.pdfbox</groupId>
+                <artifactId>pdfbox</artifactId>
+                <version>2.0.29</version>
+            </dependency>
+            
             <!-- Test Dependencies -->
             <dependency>
                 <groupId>org.apache.nifi</groupId>

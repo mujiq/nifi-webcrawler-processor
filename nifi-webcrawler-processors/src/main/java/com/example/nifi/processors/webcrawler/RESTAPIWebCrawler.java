@@ -33,6 +33,16 @@ import org.apache.hc.core5.http.config.Registry;
 import org.apache.hc.core5.http.config.RegistryBuilder;
 import org.apache.hc.core5.ssl.SSLContexts;
 
+// Add imports for HTML parsing
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
+
+// Add imports for PDF parsing
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.text.PDFTextStripper;
+
 import javax.net.ssl.SSLContext;
 import java.io.*;
 import java.util.*;
@@ -41,6 +51,7 @@ import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 import java.util.regex.Matcher;
+import java.nio.charset.StandardCharsets;
 
 @Tags({"REST", "API", "Web", "Crawler", "HTTP", "HTTPS", "DFS"})
 @CapabilityDescription("A processor that crawls REST APIs recursively using Depth-First Search (DFS) approach. " +
@@ -164,6 +175,23 @@ public class RESTAPIWebCrawler extends AbstractProcessor {
             .defaultValue("X-API-Key")
             .build();
 
+    // Add HTML link extraction property
+    public static final PropertyDescriptor HTML_LINK_SELECTOR = new PropertyDescriptor.Builder()
+            .name("HTML Link Selector")
+            .description("CSS selector to extract links from HTML content (e.g., 'a[href]' for all anchor tags)")
+            .required(false)
+            .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
+            .defaultValue("a[href]")
+            .build();
+            
+    // Add property to enable extraction from specific MIME types
+    public static final PropertyDescriptor SUPPORTED_MIME_TYPES = new PropertyDescriptor.Builder()
+            .name("Supported MIME Types")
+            .description("Comma-separated list of MIME types to process (e.g., 'application/json,text/html,application/pdf'). Leave empty to process all types.")
+            .required(false)
+            .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
+            .build();
+
     // Relationships
     public static final Relationship REL_SUCCESS = new Relationship.Builder()
             .name("success")
@@ -188,6 +216,8 @@ public class RESTAPIWebCrawler extends AbstractProcessor {
         properties.add(URL_PATTERN);
         properties.add(PAGINATION_LINK_JSONPATH);
         properties.add(RESOURCE_LINKS_JSONPATH);
+        properties.add(HTML_LINK_SELECTOR);
+        properties.add(SUPPORTED_MIME_TYPES);
         properties.add(CONNECT_TIMEOUT);
         properties.add(READ_TIMEOUT);
         properties.add(SSL_CONTEXT_SERVICE);
@@ -232,6 +262,16 @@ public class RESTAPIWebCrawler extends AbstractProcessor {
         final String baseUrl = context.getProperty(BASE_URL).evaluateAttributeExpressions(flowFile).getValue();
         final int maxDepth = context.getProperty(MAX_DEPTH).asInteger();
         final String urlPatternStr = context.getProperty(URL_PATTERN).getValue();
+        final String supportedMimeTypesStr = context.getProperty(SUPPORTED_MIME_TYPES).getValue();
+        
+        // Parse supported MIME types
+        Set<String> supportedMimeTypes = new HashSet<>();
+        if (!StringUtils.isBlank(supportedMimeTypesStr)) {
+            String[] mimeTypes = supportedMimeTypesStr.split(",");
+            for (String mimeType : mimeTypes) {
+                supportedMimeTypes.add(mimeType.trim().toLowerCase());
+            }
+        }
         
         Pattern urlPattern = null;
         if (!StringUtils.isBlank(urlPatternStr)) {
@@ -273,7 +313,24 @@ public class RESTAPIWebCrawler extends AbstractProcessor {
                         
                         if (statusCode >= 200 && statusCode < 300 && entity != null) {
                             // Read response content
-                            String responseContent = EntityUtils.toString(entity);
+                            byte[] responseBytes = EntityUtils.toByteArray(entity);
+                            String contentType = response.getHeader("Content-Type") != null ? 
+                                                response.getHeader("Content-Type").getValue() : "";
+                            
+                            // Extract base content type without parameters
+                            String baseContentType = contentType.split(";")[0].trim().toLowerCase();
+                            
+                            // If content type is missing, try to detect it from the content
+                            if (StringUtils.isBlank(baseContentType)) {
+                                baseContentType = detectContentType(responseBytes, url);
+                                getLogger().debug("Detected content type as {} for {}", new Object[]{baseContentType, url});
+                            }
+                            
+                            // Skip processing if specific MIME types are configured and this type is not supported
+                            if (!supportedMimeTypes.isEmpty() && !supportedMimeTypes.contains(baseContentType)) {
+                                getLogger().debug("Skipping unsupported content type: {}", new Object[]{baseContentType});
+                                continue;
+                            }
                             
                             // Create a FlowFile for this response
                             FlowFile responseFlowFile = session.create(flowFile);
@@ -281,36 +338,56 @@ public class RESTAPIWebCrawler extends AbstractProcessor {
                             attributes.put("webcrawler.url", url);
                             attributes.put("webcrawler.depth", String.valueOf(depth));
                             attributes.put("webcrawler.parent.url", currentItem.getParentUrl() != null ? currentItem.getParentUrl() : "");
-                            attributes.put("webcrawler.content.type", response.getHeader("Content-Type") != null ? 
-                                                                     response.getHeader("Content-Type").getValue() : "");
+                            attributes.put("webcrawler.content.type", StringUtils.isBlank(contentType) ? baseContentType : contentType);
                             attributes.put("webcrawler.status.code", String.valueOf(statusCode));
                             attributes.put("webcrawler.timestamp", String.valueOf(System.currentTimeMillis()));
+                            attributes.put("webcrawler.content.length", String.valueOf(responseBytes.length));
                             
                             responseFlowFile = session.putAllAttributes(responseFlowFile, attributes);
                             
                             // Write response content to FlowFile
-                            responseFlowFile = session.write(responseFlowFile, out -> out.write(responseContent.getBytes()));
+                            responseFlowFile = session.write(responseFlowFile, out -> out.write(responseBytes));
                             
                             // Transfer the FlowFile to success relationship
                             session.transfer(responseFlowFile, REL_SUCCESS);
                             
                             // If not at max depth, extract links and add to stack
                             if (depth < maxDepth) {
+                                List<String> extractedLinks = new ArrayList<>();
+                                
                                 try {
-                                    // Parse as JSON
-                                    ObjectMapper mapper = objectMapperRef.get();
-                                    JsonNode rootNode = mapper.readTree(responseContent);
+                                    // Process content based on MIME type
+                                    if (baseContentType.equals("application/json")) {
+                                        // Parse as JSON
+                                        String responseContent = new String(responseBytes, StandardCharsets.UTF_8);
+                                        ObjectMapper mapper = objectMapperRef.get();
+                                        JsonNode rootNode = mapper.readTree(responseContent);
+                                        
+                                        // Extract and process links
+                                        extractedLinks.addAll(extractJsonLinks(rootNode, context, url));
+                                    } else if (baseContentType.equals("text/html") || baseContentType.equals("application/xhtml+xml")) {
+                                        // Process HTML content
+                                        extractedLinks.addAll(extractHtmlLinks(responseBytes, context, url));
+                                    } else if (baseContentType.equals("application/pdf")) {
+                                        // Process PDF content
+                                        extractedLinks.addAll(extractPdfLinks(responseBytes, url));
+                                    } else if (baseContentType.startsWith("text/")) {
+                                        // Process plain text and other text formats
+                                        extractedLinks.addAll(extractTextLinks(responseBytes, url));
+                                    } else if (baseContentType.startsWith("application/xml") || baseContentType.endsWith("+xml")) {
+                                        // Process XML content
+                                        extractedLinks.addAll(extractXmlLinks(responseBytes, url));
+                                    }
+                                    // Images and other binary formats typically don't contain links
                                     
-                                    // Extract and process links
-                                    List<String> extractedLinks = extractLinks(rootNode, context, url);
-                                    
+                                    // Add extracted links to the stack
                                     for (String link : extractedLinks) {
                                         if (urlPattern == null || urlPattern.matcher(link).matches()) {
                                             stack.push(new CrawlItem(link, depth + 1, url));
                                         }
                                     }
                                 } catch (Exception e) {
-                                    getLogger().warn("Failed to parse JSON or extract links from {}: {}", new Object[]{url, e.getMessage()}, e);
+                                    getLogger().warn("Failed to parse content or extract links from {}: {}", new Object[]{url, e.getMessage()}, e);
                                 }
                             }
                         } else {
@@ -355,7 +432,7 @@ public class RESTAPIWebCrawler extends AbstractProcessor {
         }
     }
 
-    private List<String> extractLinks(JsonNode rootNode, ProcessContext context, String baseUrl) {
+    private List<String> extractJsonLinks(JsonNode rootNode, ProcessContext context, String baseUrl) {
         List<String> links = new ArrayList<>();
         
         // Extract pagination link if configured
@@ -609,5 +686,212 @@ public class RESTAPIWebCrawler extends AbstractProcessor {
         public String getParentUrl() {
             return parentUrl;
         }
+    }
+
+    /**
+     * Extract links from HTML content using JSoup
+     */
+    private List<String> extractHtmlLinks(byte[] content, ProcessContext context, String baseUrl) {
+        List<String> links = new ArrayList<>();
+        try {
+            // Parse HTML using JSoup
+            Document document = Jsoup.parse(new String(content, StandardCharsets.UTF_8), baseUrl);
+            String linkSelector = context.getProperty(HTML_LINK_SELECTOR).getValue();
+            
+            if (StringUtils.isBlank(linkSelector)) {
+                linkSelector = "a[href]"; // Default to all anchor tags
+            }
+            
+            // Extract links using the selector
+            Elements elements = document.select(linkSelector);
+            for (Element element : elements) {
+                String href = element.attr("abs:href"); // Get absolute URL
+                if (!StringUtils.isBlank(href)) {
+                    links.add(href);
+                }
+            }
+            
+            // Additionally, look for pagination links that may have specific patterns or classes
+            // Example: links with rel="next" or class="pagination-next"
+            Elements paginationLinks = document.select("a[rel=next], .pagination-next, .next-page");
+            for (Element element : paginationLinks) {
+                String href = element.attr("abs:href");
+                if (!StringUtils.isBlank(href) && !links.contains(href)) {
+                    links.add(href);
+                }
+            }
+            
+            getLogger().debug("Extracted {} links from HTML content at {}", new Object[]{links.size(), baseUrl});
+        } catch (Exception e) {
+            getLogger().warn("Failed to extract links from HTML: {}", new Object[]{e.getMessage()}, e);
+        }
+        return links;
+    }
+    
+    /**
+     * Extract links from PDF content using Apache PDFBox
+     */
+    private List<String> extractPdfLinks(byte[] content, String baseUrl) {
+        List<String> links = new ArrayList<>();
+        try (PDDocument document = PDDocument.load(content)) {
+            // Extract text from PDF
+            PDFTextStripper stripper = new PDFTextStripper();
+            String text = stripper.getText(document);
+            
+            // Use a regex to find URLs in the text
+            Pattern urlPattern = Pattern.compile(
+                "\\b(https?|ftp|file)://[-a-zA-Z0-9+&@#/%?=~_|!:,.;]*[-a-zA-Z0-9+&@#/%=~_|]");
+            Matcher matcher = urlPattern.matcher(text);
+            
+            while (matcher.find()) {
+                links.add(matcher.group());
+            }
+            
+            getLogger().debug("Extracted {} links from PDF document", new Object[]{links.size()});
+        } catch (Exception e) {
+            getLogger().warn("Failed to extract links from PDF: {}", new Object[]{e.getMessage()}, e);
+        }
+        return links;
+    }
+    
+    /**
+     * Extract text from PDF - now implemented using PDFBox
+     */
+    private String extractTextFromPdf(byte[] pdfBytes) {
+        try (PDDocument document = PDDocument.load(pdfBytes)) {
+            PDFTextStripper stripper = new PDFTextStripper();
+            return stripper.getText(document);
+        } catch (Exception e) {
+            getLogger().warn("Failed to extract text from PDF: {}", new Object[]{e.getMessage()}, e);
+            return "";
+        }
+    }
+    
+    /**
+     * Extract links from text content
+     */
+    private List<String> extractTextLinks(byte[] content, String baseUrl) {
+        List<String> links = new ArrayList<>();
+        try {
+            String text = new String(content);
+            
+            // Use a regex to find URLs in the text
+            Pattern urlPattern = Pattern.compile(
+                "\\b(https?|ftp|file)://[-a-zA-Z0-9+&@#/%?=~_|!:,.;]*[-a-zA-Z0-9+&@#/%=~_|]");
+            Matcher matcher = urlPattern.matcher(text);
+            
+            while (matcher.find()) {
+                links.add(matcher.group());
+            }
+        } catch (Exception e) {
+            getLogger().warn("Failed to extract links from text: {}", new Object[]{e.getMessage()}, e);
+        }
+        return links;
+    }
+
+    /**
+     * Attempt to detect the content type from the content bytes
+     * @param contentBytes The content bytes
+     * @param url The URL of the content
+     * @return The detected content type or "application/octet-stream" if unknown
+     */
+    private String detectContentType(byte[] contentBytes, String url) {
+        // Check for common file signatures/magic numbers
+        
+        // Check if it's likely HTML
+        String start = new String(contentBytes, 0, Math.min(contentBytes.length, 100), StandardCharsets.UTF_8).toLowerCase();
+        if (start.contains("<!doctype html") || start.contains("<html") || start.contains("<head") || start.contains("<body")) {
+            return "text/html";
+        }
+        
+        // Check for PDF signature (%PDF-)
+        if (contentBytes.length > 4 && 
+            contentBytes[0] == 0x25 && contentBytes[1] == 0x50 && 
+            contentBytes[2] == 0x44 && contentBytes[3] == 0x46) {
+            return "application/pdf";
+        }
+        
+        // Check if it's likely JSON
+        if (contentBytes.length > 2 && 
+            ((contentBytes[0] == '{' && contentBytes[contentBytes.length - 1] == '}') || 
+             (contentBytes[0] == '[' && contentBytes[contentBytes.length - 1] == ']'))) {
+            return "application/json";
+        }
+        
+        // Check if it's likely XML
+        if (start.contains("<?xml") || start.contains("<!doctype") || 
+            (start.contains("<") && start.contains(">"))) {
+            return "application/xml";
+        }
+        
+        // Check if it's likely plain text
+        boolean isProbablyText = true;
+        for (int i = 0; i < Math.min(contentBytes.length, 500); i++) {
+            if (contentBytes[i] < 9 || (contentBytes[i] > 13 && contentBytes[i] < 32)) {
+                isProbablyText = false;
+                break;
+            }
+        }
+        
+        if (isProbablyText) {
+            return "text/plain";
+        }
+        
+        // Try to guess from URL extension
+        if (url.toLowerCase().endsWith(".jpg") || url.toLowerCase().endsWith(".jpeg")) {
+            return "image/jpeg";
+        } else if (url.toLowerCase().endsWith(".png")) {
+            return "image/png";
+        } else if (url.toLowerCase().endsWith(".gif")) {
+            return "image/gif";
+        } else if (url.toLowerCase().endsWith(".pdf")) {
+            return "application/pdf";
+        } else if (url.toLowerCase().endsWith(".html") || url.toLowerCase().endsWith(".htm")) {
+            return "text/html";
+        } else if (url.toLowerCase().endsWith(".json")) {
+            return "application/json";
+        } else if (url.toLowerCase().endsWith(".xml")) {
+            return "application/xml";
+        } else if (url.toLowerCase().endsWith(".txt")) {
+            return "text/plain";
+        }
+        
+        // Default to binary if we can't detect
+        return "application/octet-stream";
+    }
+    
+    /**
+     * Extract links from XML content
+     */
+    private List<String> extractXmlLinks(byte[] content, String baseUrl) {
+        List<String> links = new ArrayList<>();
+        try {
+            // Simple extraction of anything that looks like a URL in XML
+            String xmlText = new String(content, StandardCharsets.UTF_8);
+            
+            // Use regex to find URLs in href, src, or url attributes
+            Pattern urlPattern = Pattern.compile("(href|src|url)\\s*=\\s*[\"']([^\"']+)[\"']", Pattern.CASE_INSENSITIVE);
+            Matcher matcher = urlPattern.matcher(xmlText);
+            
+            while (matcher.find()) {
+                String url = matcher.group(2);
+                if (!StringUtils.isBlank(url)) {
+                    links.add(resolveUrl(url, baseUrl));
+                }
+            }
+            
+            // Also look for any standalone URLs
+            urlPattern = Pattern.compile("\\b(https?|ftp|file)://[-a-zA-Z0-9+&@#/%?=~_|!:,.;]*[-a-zA-Z0-9+&@#/%=~_|]");
+            matcher = urlPattern.matcher(xmlText);
+            
+            while (matcher.find()) {
+                links.add(matcher.group());
+            }
+            
+            getLogger().debug("Extracted {} links from XML content", new Object[]{links.size()});
+        } catch (Exception e) {
+            getLogger().warn("Failed to extract links from XML: {}", new Object[]{e.getMessage()}, e);
+        }
+        return links;
     }
 } 

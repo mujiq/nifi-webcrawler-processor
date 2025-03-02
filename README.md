@@ -18,6 +18,7 @@ A custom Apache NiFi processor for recursively crawling REST APIs using a Depth-
 - Maven 3.x
 - Podman (for container deployment)
 - macOS (for the build scripts)
+- NiFi 1.15.3 (future NiFi 2.x support planned)
 
 ## Quick Start
 
@@ -122,7 +123,7 @@ The processor implements a recursive DFS approach:
 The Podman container is configured with:
 - 4 CPU cores
 - 8GB RAM
-- 80GB disk space
+- 40GB disk space
 
 ## Development
 
@@ -142,15 +143,3 @@ The Podman container is configured with:
 ### Building from Source
 
 ```
-mvn clean install
-```
-
-### Running Tests
-
-```
-mvn test
-```
-
-## License
-
-Apache License 2.0 
