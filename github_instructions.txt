@@ -24,6 +24,26 @@ git push -u origin main
 2. You should see all your project files listed
 3. The README.md will be rendered on the main page
 
+## Project Structure
+The project contains the following structure:
+```
+.
+├── .github/                    # GitHub specific files
+│   ├── workflows/              # GitHub Actions workflow configurations
+│   ├── ISSUE_TEMPLATE/         # Issue templates
+│   └── PULL_REQUEST_TEMPLATE/  # PR templates
+├── scripts/                    # Scripts for building and deploying
+│   ├── build.sh                # Build script for NAR file
+│   ├── deploy.sh               # Deployment script for NiFi container
+│   └── clean.sh                # Cleanup script for environment
+├── nifi-webcrawler-processors/ # Processor implementation
+├── nifi-webcrawler-nar/        # NAR packaging
+├── pom.xml                     # Maven parent project
+├── README.md                   # Project documentation
+├── LICENSE                     # Apache License 2.0
+└── CONTRIBUTING.md             # Contribution guidelines
+```
+
 ## Next steps
 - Set up GitHub Actions for CI/CD if needed
 - Add collaborators to your repository

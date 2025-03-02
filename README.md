@@ -25,28 +25,28 @@ A custom Apache NiFi processor for recursively crawling REST APIs using a Depth-
 
 1. Make the scripts executable:
    ```
-   chmod +x build.sh deploy.sh clean.sh
+   chmod +x scripts/build.sh scripts/deploy.sh scripts/clean.sh
    ```
 
 2. Build the NAR file (processor module):
    ```
-   ./build.sh
+   ./scripts/build.sh
    ```
 
 3. Deploy using the official Apache NiFi container:
    ```
-   ./deploy.sh
+   ./scripts/deploy.sh
    ```
 
 4. Access the NiFi web UI at http://localhost:8080/nifi
 
 ### Workflow Explanation
 
-The workflow is divided into two separate scripts:
+The workflow is divided into separate scripts in the `scripts` directory:
 
-- `build.sh`: Builds only the Maven project to create the NAR file
-- `deploy.sh`: Deploys using the official Apache NiFi image and installs the NAR file
-- `clean.sh`: Completely cleans up the environment (containers, volumes, build artifacts)
+- `scripts/build.sh`: Builds only the Maven project to create the NAR file
+- `scripts/deploy.sh`: Deploys using the official Apache NiFi image and installs the NAR file
+- `scripts/clean.sh`: Completely cleans up the environment (containers, volumes, build artifacts)
 
 This separation allows you to:
 1. Build the processor once
@@ -59,7 +59,7 @@ This separation allows you to:
 To clean up your development environment:
 
 ```
-./clean.sh
+./scripts/clean.sh
 ```
 
 This will:
@@ -130,8 +130,10 @@ The Podman container is configured with:
 
 ```
 .
-├── build.sh                  # Build script for NAR file
-├── deploy.sh                 # Deployment script for NiFi container
+├── scripts/                  # Scripts for building and deploying
+│   ├── build.sh              # Build script for NAR file
+│   ├── deploy.sh             # Deployment script for NiFi container
+│   └── clean.sh              # Cleanup script for environment
 ├── pom.xml                   # Maven parent project
 ├── nifi-webcrawler-processors/ # Processor implementation
 └── nifi-webcrawler-nar/      # NAR packaging
