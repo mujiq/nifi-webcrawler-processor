@@ -67,6 +67,29 @@ fi
 
 echo "Found NAR file: $NAR_FILE"
 
+# Check if NiFi container is already running
+if podman ps -a --filter name=$CONTAINER_NAME --filter status=running | grep -q $CONTAINER_NAME; then
+    echo "NiFi container is already running. Just updating the NAR file..."
+    
+    # Copy the NAR file to the container's lib directory
+    echo "Copying NAR file to container..."
+    podman cp $NAR_FILE $CONTAINER_NAME:/opt/nifi/nifi-current/lib/
+    
+    # Copy to extensions directory as well for completeness
+    echo "Copying NAR file to extensions directory..."
+    podman exec $CONTAINER_NAME mkdir -p /opt/nifi/nifi-current/extensions
+    podman cp $NAR_FILE $CONTAINER_NAME:/opt/nifi/nifi-current/extensions/
+    
+    echo "=========================================="
+    echo "NAR file has been updated in the running NiFi container."
+    echo "You may need to restart the processor or NiFi to load the new version."
+    echo "To restart NiFi: podman restart $CONTAINER_NAME"
+    echo "=========================================="
+    exit 0
+fi
+
+# If we get here, the container isn't running, so continue with full deployment
+
 # Pull the official NiFi image
 echo "Pulling official Apache NiFi image: $IMAGE_NAME for arm64 architecture"
 podman pull --platform linux/arm64 $IMAGE_NAME
@@ -193,4 +216,4 @@ cat > nifi_credentials.txt << EOL
 NiFi Admin Username: $NIFI_ADMIN_USERNAME
 NiFi Admin Password: $NIFI_ADMIN_PASSWORD
 EOL
-chmod 600 nifi_credentials.txt 
+chmod 600 nifi_credentials.txt
