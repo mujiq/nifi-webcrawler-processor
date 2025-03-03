@@ -1,1 +1,1 @@
-com.example.nifi.processors.webcrawler.RESTAPIWebCrawler 
+com.example.nifi.processors.webcrawler.WebCrawler 

@@ -69,51 +69,35 @@ echo "Found NAR file: $NAR_FILE"
 
 # Check if NiFi container is already running
 if podman ps -a --filter name=$CONTAINER_NAME --filter status=running | grep -q $CONTAINER_NAME; then
-    echo "NiFi container is already running. Just updating the NAR file..."
+    echo "NiFi container is already running. Restarting to update the NAR file..."
     
-    # Copy the NAR file to the container's lib directory
-    echo "Copying NAR file to container..."
-    podman cp $NAR_FILE $CONTAINER_NAME:/opt/nifi/nifi-current/lib/
+    # Stop the container
+    echo "Stopping NiFi container..."
+    podman stop -t 30 $CONTAINER_NAME
     
-    # Copy to extensions directory as well for completeness
-    echo "Copying NAR file to extensions directory..."
-    podman exec $CONTAINER_NAME mkdir -p /opt/nifi/nifi-current/extensions
-    podman cp $NAR_FILE $CONTAINER_NAME:/opt/nifi/nifi-current/extensions/
+    # Get volume mount paths
+    NAR_VOLUME_PATH=$(podman volume inspect $NAR_VOLUME --format "{{.Mountpoint}}")
+    echo "NAR volume path: $NAR_VOLUME_PATH"
     
-    echo "Restarting NiFi process inside the container to load the new NAR file..."
+    # Update NAR file in the volume
+    echo "Updating NAR file in volume..."
+    podman run --platform linux/arm64 --rm -v $NAR_VOLUME:/nars -v $(pwd)/nifi-webcrawler-nar/target:/src:ro alpine sh -c "mkdir -p /nars && cp /src/nifi-webcrawler-nar-*.nar /nars/"
     
-    # First get the process ID of the NiFi Java process
-    NIFI_PID=$(podman exec $CONTAINER_NAME ps -ef | grep java | grep nifi | grep -v grep | awk '{print $1}')
+    # Start the container again
+    echo "Starting NiFi container..."
+    podman start $CONTAINER_NAME
     
-    if [ -n "$NIFI_PID" ]; then
-        echo "Found NiFi process with PID: $NIFI_PID"
-        
-        # Send SIGTERM to the process to trigger a graceful shutdown
-        echo "Stopping NiFi process..."
-        podman exec $CONTAINER_NAME kill -15 $NIFI_PID
-        
-        # Wait for the process to stop
-        echo "Waiting for NiFi to stop gracefully..."
-        sleep 10
-        
-        # Start NiFi again using the startup script
-        echo "Starting NiFi process..."
-        podman exec -d $CONTAINER_NAME /opt/nifi/nifi-current/bin/nifi.sh start
-        
-        # Wait for NiFi to start
-        echo "Waiting for NiFi to start..."
-        sleep 20
-        
-        echo "=========================================="
-        echo "NAR file has been updated and NiFi process restarted."
-        echo "NiFi should now recognize the updated processor."
-        echo "If NiFi doesn't appear to be running, you may need to restart the container:"
-        echo "podman restart $CONTAINER_NAME"
-        echo "=========================================="
-    else
-        echo "Warning: Could not find the NiFi process. The NAR file has been updated, but you'll need to restart the container manually:"
-        echo "podman restart $CONTAINER_NAME"
-    fi
+    echo "Waiting for NiFi to start..."
+    sleep 20
+    
+    echo "=========================================="
+    echo "NiFi container has been restarted with the updated NAR file."
+    echo "NiFi should now recognize the updated processor."
+    echo "=========================================="
+    
+    # Get the logs to ensure NiFi is starting properly
+    echo "Container logs:"
+    podman logs $CONTAINER_NAME | tail -n 20
     
     exit 0
 fi

@@ -25,7 +25,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
-public class RESTAPIWebCrawlerIT {
+public class WebCrawlerIT {
 
     private static HttpServer server;
     private static final Map<String, String> API_RESPONSES = new HashMap<>();
@@ -115,20 +115,20 @@ public class RESTAPIWebCrawlerIT {
     @Test
     @Timeout(value = 30, unit = TimeUnit.SECONDS)
     public void testRecursiveCrawling() {
-        TestRunner runner = TestRunners.newTestRunner(RESTAPIWebCrawler.class);
+        TestRunner runner = TestRunners.newTestRunner(WebCrawler.class);
         
         // Configure processor
-        runner.setProperty(RESTAPIWebCrawler.BASE_URL, "http://localhost:" + PORT + "/api/items");
-        runner.setProperty(RESTAPIWebCrawler.MAX_DEPTH, "1");
-        runner.setProperty(RESTAPIWebCrawler.PAGINATION_LINK_JSONPATH, "$.links.next");
-        runner.setProperty(RESTAPIWebCrawler.RESOURCE_LINKS_JSONPATH, "$.items[*].detail");
+        runner.setProperty(WebCrawler.BASE_URL, "http://localhost:" + PORT + "/api/items");
+        runner.setProperty(WebCrawler.MAX_DEPTH, "1");
+        runner.setProperty(WebCrawler.PAGINATION_LINK_JSONPATH, "$.links.next");
+        runner.setProperty(WebCrawler.RESOURCE_LINKS_JSONPATH, "$.items[*].detail");
         
         // Run the processor
         runner.run();
         
         // Verify results - should have 10 successful flowfiles
         // 1 for base URL, 1 for page 2, and 6 for individual items (with page 2 items having depth 1)
-        List<MockFlowFile> successFiles = runner.getFlowFilesForRelationship(RESTAPIWebCrawler.REL_SUCCESS);
+        List<MockFlowFile> successFiles = runner.getFlowFilesForRelationship(WebCrawler.REL_SUCCESS);
         assertTrue(successFiles.size() >= 8, "Expected at least 8 success files but got " + successFiles.size());
         
         // Verify that we have the expected URLs and depths
@@ -183,20 +183,20 @@ public class RESTAPIWebCrawlerIT {
     @Test
     @Timeout(value = 30, unit = TimeUnit.SECONDS)
     public void testUrlPatternFiltering() {
-        TestRunner runner = TestRunners.newTestRunner(RESTAPIWebCrawler.class);
+        TestRunner runner = TestRunners.newTestRunner(WebCrawler.class);
         
         // Configure processor with URL pattern to only crawl odd-numbered items
-        runner.setProperty(RESTAPIWebCrawler.BASE_URL, "http://localhost:" + PORT + "/api/items");
-        runner.setProperty(RESTAPIWebCrawler.MAX_DEPTH, "1");
-        runner.setProperty(RESTAPIWebCrawler.PAGINATION_LINK_JSONPATH, "$.links.next");
-        runner.setProperty(RESTAPIWebCrawler.RESOURCE_LINKS_JSONPATH, "$.items[*].detail");
-        runner.setProperty(RESTAPIWebCrawler.URL_PATTERN, ".*/items/[135]$");
+        runner.setProperty(WebCrawler.BASE_URL, "http://localhost:" + PORT + "/api/items");
+        runner.setProperty(WebCrawler.MAX_DEPTH, "1");
+        runner.setProperty(WebCrawler.PAGINATION_LINK_JSONPATH, "$.links.next");
+        runner.setProperty(WebCrawler.RESOURCE_LINKS_JSONPATH, "$.items[*].detail");
+        runner.setProperty(WebCrawler.URL_PATTERN, ".*/items/[135]$");
         
         // Run the processor
         runner.run();
         
         // Verify results - should only crawl items 1, 3, 5
-        List<MockFlowFile> successFiles = runner.getFlowFilesForRelationship(RESTAPIWebCrawler.REL_SUCCESS);
+        List<MockFlowFile> successFiles = runner.getFlowFilesForRelationship(WebCrawler.REL_SUCCESS);
         assertTrue(successFiles.size() >= 5, "Expected at least 5 success files but got " + successFiles.size());
         
         // Check that only odd-numbered items were crawled
